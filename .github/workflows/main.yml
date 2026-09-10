@@ -24,43 +24,44 @@ jobs:
           echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Find V2 project ZIP
+      - name: Find and extract V2 ZIP
         run: |
-          echo "ZIP files in repository:"
-          find . -maxdepth 2 -type f -iname "*.zip" -print
-
-          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "*.zip" \
-            ! -name "gradle-8.7-bin.zip" \
-            -print -quit)
+          ZIP_FILE=$(find . -maxdepth 2 -type f -name 'SIYOMA_Tenant_Rent_Tracker_V2_UPGRADED_PASSWORD_239358.zip' -print -quit)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No V2 project ZIP found."
+            echo "ERROR: V2 ZIP not found."
+            echo "ZIP files currently in repository:"
+            find . -maxdepth 2 -type f -name '*.zip' -print
             exit 1
           fi
 
-          echo "Using ZIP: $ZIP_FILE"
-          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+          echo "Found: $ZIP_FILE"
 
-      - name: Extract V2 project ZIP
-        run: |
           mkdir -p v2_project
           unzip -o "$ZIP_FILE" -d v2_project
 
-      - name: Verify V2 project structure
+      - name: Check V2 project
         run: |
-          echo "Searching for Android project..."
+          echo "Checking V2 project..."
+          test -f v2_project/settings.gradle
+          test -f v2_project/build.gradle
+          test -f v2_project/app/build.gradle
+          test -f v2_project/app/src/main/AndroidManifest.xml
+          echo "V2 project structure OK."
 
-          SETTINGS=$(find v2_project -name settings.gradle -type f -print -quit)
+      - name: Build V2 APK
+        working-directory: v2_project
+        run: |
+          gradle :app:assembleDebug --no-daemon
 
-          if [ -z "$SETTINGS" ]; then
-            echo "ERROR: settings.gradle not found."
-            find v2_project -maxdepth 4 -type f -print
-            exit 1
-          fi
+      - name: Verify APK
+        run: |
+          echo "Checking APK..."
+          find v2_project/app/build/outputs/apk -type f -name '*.apk' -print
 
-          PROJECT_DIR=$(dirname "$SETTINGS")
-
-          echo "Project directory: $PROJECT_DIR"
-
-          test -f "$PROJECT_DIR/build.gradle"
-          test -f "$PROJECT_DIR/app/build
+      - name: Upload V2 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SIYOMA-Tenant-Rent-Tracker-V2-APK
+          path: v2_project/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
