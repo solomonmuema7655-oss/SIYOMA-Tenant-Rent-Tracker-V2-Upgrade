@@ -24,44 +24,70 @@ jobs:
           echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Find and extract V2 ZIP
+      - name: Find official-icon V2 ZIP
         run: |
-          ZIP_FILE=$(find . -maxdepth 2 -type f -name 'SIYOMA_Tenant_Rent_Tracker_V2_UPGRADED_PASSWORD_239358.zip' -print -quit)
+          ZIP_FILE=$(find . -maxdepth 2 -type f \
+            -name 'SIYOMA_Tenant_Rent_Tracker_V2_V2.0_OFFICIAL_ICON_239358.zip' \
+            -print -quit)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: V2 ZIP not found."
-            echo "ZIP files currently in repository:"
+            echo "ERROR: Official-icon V2 ZIP was not found."
+            echo "ZIP files in repository:"
             find . -maxdepth 2 -type f -name '*.zip' -print
             exit 1
           fi
 
-          echo "Found: $ZIP_FILE"
+          echo "Found ZIP: $ZIP_FILE"
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
+      - name: Extract V2 project
+        run: |
           mkdir -p v2_project
           unzip -o "$ZIP_FILE" -d v2_project
 
-      - name: Check V2 project
+      - name: Verify Android project
         run: |
           echo "Checking V2 project..."
+
           test -f v2_project/settings.gradle
           test -f v2_project/build.gradle
           test -f v2_project/app/build.gradle
           test -f v2_project/app/src/main/AndroidManifest.xml
-          echo "V2 project structure OK."
+          test -f v2_project/app/src/main/assets/index.html
+          test -f v2_project/app/src/main/assets/app.js
 
-      - name: Build V2 APK
+          echo "Android project structure: OK"
+
+          echo "Checking launcher icons..."
+          find v2_project/app/src/main/res -type f \
+            \( -name 'ic_launcher*' -o -name 'ic_launcher_round*' \) \
+            -print
+
+          echo "Icon resources check complete."
+
+      - name: Build V2.0 APK
         working-directory: v2_project
         run: |
           gradle :app:assembleDebug --no-daemon
 
       - name: Verify APK
         run: |
-          echo "Checking APK..."
-          find v2_project/app/build/outputs/apk -type f -name '*.apk' -print
+          echo "Searching for generated APK..."
 
-      - name: Upload V2 APK
+          APK=$(find v2_project/app/build/outputs/apk \
+            -type f -name '*.apk' -print -quit)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo "SUCCESS: APK generated:"
+          echo "$APK"
+
+      - name: Upload V2.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: SIYOMA-Tenant-Rent-Tracker-V2-APK
+          name: SIYOMA-Tenant-Rent-Tracker-V2-OFFICIAL-ICON-APK
           path: v2_project/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
