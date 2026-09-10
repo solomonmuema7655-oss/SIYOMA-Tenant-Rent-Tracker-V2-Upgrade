@@ -24,25 +24,30 @@ jobs:
           echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Check project files
+      - name: Extract V2 project ZIP
         run: |
-          echo "Project files:"
-          ls -la
-          echo "App files:"
-          ls -la app
+          unzip -o SIYOMA_Tenant_Rent_Tracker_V2_UPGRADED.zip -d v2_project
+
+      - name: Check extracted project
+        run: |
+          echo "Extracted project files:"
+          ls -la v2_project
+          echo "App directory:"
+          ls -la v2_project/app
 
       - name: Build V2 APK
+        working-directory: v2_project
         run: |
           gradle :app:assembleDebug --no-daemon
 
       - name: Verify APK
         run: |
           echo "Checking generated APK..."
-          find app/build/outputs/apk -type f -name "*.apk" -print
+          find v2_project/app/build/outputs/apk -type f -name "*.apk" -print
 
       - name: Upload V2 APK
         uses: actions/upload-artifact@v4
         with:
           name: SIYOMA-Tenant-Rent-Tracker-V2-APK
-          path: app/build/outputs/apk/**/*.apk
+          path: v2_project/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
