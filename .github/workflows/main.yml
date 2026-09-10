@@ -24,20 +24,21 @@ jobs:
           echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Find official-icon V2 ZIP
+      - name: Find official icon ZIP
         run: |
           ZIP_FILE=$(find . -maxdepth 2 -type f \
-            -name 'SIYOMA_Tenant_Rent_Tracker_V2_V2.0_OFFICIAL_ICON_239358.zip' \
+            -name 'SIYOMA_Tenant_Rent_Tracker_V2_UPGRADED_PASSWORD_239358_WITH_ICON.zip' \
             -print -quit)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Official-icon V2 ZIP was not found."
+            echo "ERROR: Official icon ZIP was not found."
             echo "ZIP files in repository:"
             find . -maxdepth 2 -type f -name '*.zip' -print
             exit 1
           fi
 
-          echo "Found ZIP: $ZIP_FILE"
+          echo "Found official icon ZIP:"
+          echo "$ZIP_FILE"
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
       - name: Extract V2 project
