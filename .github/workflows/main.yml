@@ -24,11 +24,16 @@ jobs:
           echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
           gradle --version
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      - name: Check project files
+        run: |
+          echo "Project files:"
+          ls -la
+          echo "App files:"
+          ls -la app
 
       - name: Build V2 APK
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: |
+          gradle :app:assembleDebug --no-daemon
 
       - name: Verify APK
         run: |
