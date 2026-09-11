@@ -1,4 +1,4 @@
-name: Build SIYOMA Tenant Rent Tracker V2 APK
+name: Build SIYOMA Tenant & Rent Tracker V2 APK
 
 on:
   workflow_dispatch:
@@ -18,77 +18,80 @@ jobs:
           java-version: '17'
 
       - name: Install Gradle 8.7
+        shell: bash
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
-          unzip -q gradle-8.7-bin.zip
-          echo "$PWD/gradle-8.7/bin" >> "$GITHUB_PATH"
-          gradle --version
+          set -e
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle-8.7-bin.zip
+          unzip -q /tmp/gradle-8.7-bin.zip -d /opt
+          echo "/opt/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find official icon ZIP
+      - name: Prepare V2 project
+        shell: bash
         run: |
-          ZIP_FILE=$(find . -maxdepth 2 -type f \
-            -name 'SIYOMA_Tenant_Rent_Tracker_V2_UPGRADED_PASSWORD_239358_WITH_ICON.zip' \
-            -print -quit)
+          set -e
+          rm -rf build-project
+
+          if [ -f "settings.gradle" ] && [ -f "app/build.gradle" ]; then
+            echo "BUILD_DIR=." >> "$GITHUB_ENV"
+            echo "Android project found directly in repository root."
+            exit 0
+          fi
+
+          ZIP_FILE=$(find . -maxdepth 2 -type f -name '*.zip' \
+            ! -name 'gradle-8.7-bin.zip' \
+            ! -name '*gradle*' \
+            -print | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Official icon ZIP was not found."
-            echo "ZIP files in repository:"
-            find . -maxdepth 2 -type f -name '*.zip' -print
+            echo "ERROR: No SIYOMA project ZIP was found."
+            echo "ZIP files currently in the repository:"
+            find . -maxdepth 2 -type f -name '*.zip' -print || true
             exit 1
           fi
 
-          echo "Found official icon ZIP:"
-          echo "$ZIP_FILE"
-          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+          echo "Using project ZIP: $ZIP_FILE"
+          mkdir -p build-project
+          unzip -q "$ZIP_FILE" -d build-project
 
-      - name: Extract V2 project
+          if [ -f "build-project/settings.gradle" ] && [ -f "build-project/app/build.gradle" ]; then
+            echo "BUILD_DIR=build-project" >> "$GITHUB_ENV"
+          else
+            PROJECT_DIR=$(find build-project -mindepth 1 -maxdepth 2 -type f -name 'settings.gradle' -print -quit | xargs -r dirname)
+
+            if [ -n "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/app/build.gradle" ]; then
+              echo "BUILD_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+            else
+              echo "ERROR: Extracted ZIP does not contain a valid Android project."
+              find build-project -maxdepth 4 -type f \( -name 'settings.gradle' -o -name 'build.gradle' \) -print
+              exit 1
+            fi
+          fi
+
+      - name: Verify exact official V2 launcher icon
+        shell: bash
         run: |
-          mkdir -p v2_project
-          unzip -o "$ZIP_FILE" -d v2_project
+          set -e
 
-      - name: Verify Android project
-        run: |
-          echo "Checking V2 project..."
+          ICON="$BUILD_DIR/app/src/main/res/drawable/siyoma_v2_icon.png"
 
-          test -f v2_project/settings.gradle
-          test -f v2_project/build.gradle
-          test -f v2_project/app/build.gradle
-          test -f v2_project/app/src/main/AndroidManifest.xml
-          test -f v2_project/app/src/main/assets/index.html
-          test -f v2_project/app/src/main/assets/app.js
-
-          echo "Android project structure: OK"
-
-          echo "Checking launcher icons..."
-          find v2_project/app/src/main/res -type f \
-            \( -name 'ic_launcher*' -o -name 'ic_launcher_round*' \) \
-            -print
-
-          echo "Icon resources check complete."
-
-      - name: Build V2.0 APK
-        working-directory: v2_project
-        run: |
-          gradle :app:assembleDebug --no-daemon
-
-      - name: Verify APK
-        run: |
-          echo "Searching for generated APK..."
-
-          APK=$(find v2_project/app/build/outputs/apk \
-            -type f -name '*.apk' -print -quit)
-
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK was not generated."
+          if [ ! -f "$ICON" ]; then
+            echo "ERROR: The official SIYOMA V2 launcher icon is missing."
             exit 1
           fi
 
-          echo "SUCCESS: APK generated:"
-          echo "$APK"
+          echo "Official SIYOMA V2 launcher icon found: $ICON"
 
-      - name: Upload V2.0 APK
+      - name: Make Gradle executable
+        working-directory: ${{ env.BUILD_DIR }}
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SIYOMA-Tenant-Rent-Tracker-V2-OFFICIAL-ICON-APK
-          path: v2_project/app/build/outputs/apk/**/*.apk
+          name: SIYOMA-Tenant-Rent-Tracker-V2-Prepaid-Fix-APK
+          path: ${{ env.BUILD_DIR }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
