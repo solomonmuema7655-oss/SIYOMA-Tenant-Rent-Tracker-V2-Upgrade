@@ -25,49 +25,52 @@ jobs:
           unzip -q /tmp/gradle-8.7-bin.zip -d /opt
           echo "/opt/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Prepare V2 project
+      - name: Locate Android project
         shell: bash
         run: |
           set -e
-          rm -rf build-project
 
           if [ -f "settings.gradle" ] && [ -f "app/build.gradle" ]; then
             echo "BUILD_DIR=." >> "$GITHUB_ENV"
-            echo "Android project found directly in repository root."
+            echo "Android project is already at repository root."
             exit 0
           fi
 
-          ZIP_FILE=$(find . -maxdepth 2 -type f -name '*.zip' \
-            ! -name 'gradle-8.7-bin.zip' \
-            ! -name '*gradle*' \
-            -print | head -n 1)
+          ZIP_FILE=$(find . -maxdepth 2 -type f -iname '*.zip' \
+            ! -name 'gradle-*.zip' \
+            -print -quit)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No SIYOMA project ZIP was found."
-            echo "ZIP files currently in the repository:"
-            find . -maxdepth 2 -type f -name '*.zip' -print || true
+            echo "ERROR: No SIYOMA project ZIP found."
+            echo "ZIP files in repository:"
+            find . -maxdepth 2 -type f -iname '*.zip' -print || true
             exit 1
           fi
 
           echo "Using project ZIP: $ZIP_FILE"
+
+          rm -rf build-project
           mkdir -p build-project
           unzip -q "$ZIP_FILE" -d build-project
 
           if [ -f "build-project/settings.gradle" ] && [ -f "build-project/app/build.gradle" ]; then
             echo "BUILD_DIR=build-project" >> "$GITHUB_ENV"
-          else
-            PROJECT_DIR=$(find build-project -mindepth 1 -maxdepth 2 -type f -name 'settings.gradle' -print -quit | xargs -r dirname)
-
-            if [ -n "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/app/build.gradle" ]; then
-              echo "BUILD_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-            else
-              echo "ERROR: Extracted ZIP does not contain a valid Android project."
-              find build-project -maxdepth 4 -type f \( -name 'settings.gradle' -o -name 'build.gradle' \) -print
-              exit 1
-            fi
+            exit 0
           fi
 
-      - name: Verify exact official V2 launcher icon
+          PROJECT_DIR=$(find build-project -mindepth 1 -maxdepth 3 \
+            -type f -name 'settings.gradle' -print -quit | xargs -r dirname)
+
+          if [ -n "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/app/build.gradle" ]; then
+            echo "BUILD_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          else
+            echo "ERROR: The selected ZIP does not contain a valid Android project."
+            find build-project -maxdepth 5 -type f \
+              \( -name 'settings.gradle' -o -name 'build.gradle' \) -print
+            exit 1
+          fi
+
+      - name: Verify official V2 icon
         shell: bash
         run: |
           set -e
@@ -75,21 +78,20 @@ jobs:
           ICON="$BUILD_DIR/app/src/main/res/drawable/siyoma_v2_icon.png"
 
           if [ ! -f "$ICON" ]; then
-            echo "ERROR: The official SIYOMA V2 launcher icon is missing."
+            echo "ERROR: Official SIYOMA V2 icon is missing: $ICON"
             exit 1
           fi
 
-          echo "Official SIYOMA V2 launcher icon found: $ICON"
+          echo "Official SIYOMA V2 icon verified."
 
-      - name: Make Gradle executable
+      - name: Build APK
         working-directory: ${{ env.BUILD_DIR }}
-        run: chmod +x gradlew
+        run: |
+          set -e
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Build debug APK
-        working-directory: ${{ env.BUILD_DIR }}
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SIYOMA-Tenant-Rent-Tracker-V2-Prepaid-Fix-APK
